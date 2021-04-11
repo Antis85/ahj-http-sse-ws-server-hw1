@@ -1,13 +1,12 @@
 const http = require('http');
 const Koa = require('koa');
-const Router = require('koa-router');
 const WS = require('ws');
 const uuid = require('uuid');
 
 const app = new Koa();
 
 app.use(async (ctx, next) => {
-  const origin = ctx.request.get('Origin');  
+  const origin = ctx.request.get('Origin');
   if (!origin) {
     return await next();
   }
@@ -48,18 +47,12 @@ let wsClients = [];
 const chatMessages = [];
 
 wsServer.on('connection', (ws, req) => {
-  const errCallback = (err) => {
-    if (err) {
-      console.log('errCallback: ', err)
-    }
-  };
-
-  ws.on('close', () => {    
-    const closedWS = wsClients.find(closedWS => closedWS.ws === ws);
+  ws.on('close', () => {
+    const closedWS = wsClients.find((closed) => closed.ws === ws);
     if (!closedWS) return;
-    const {nickname} = closedWS;   
-    wsClients = wsClients.filter(user => user.nickname !== nickname);
-    const chatUsers = wsClients.map(user => user.nickname);
+    const { nickname } = closedWS;
+    wsClients = wsClients.filter((user) => user.nickname !== nickname);
+    const chatUsers = wsClients.map((user) => user.nickname);
     if (!chatUsers.length) return;
 
     const responseUserExit = {
@@ -70,40 +63,40 @@ wsServer.on('connection', (ws, req) => {
 
     [...wsServer.clients]
       .filter((client) => client.readyState === WS.OPEN)
-        .forEach((client) => client.send(JSON.stringify(responseUserExit), errCallback));
+      .forEach((client) => client.send(JSON.stringify(responseUserExit)));
   });
 
-  ws.on('message', msg => {
+  ws.on('message', (msg) => {
     let jsonMsg;
     try {
-      jsonMsg =  JSON.parse(msg);
+      jsonMsg = JSON.parse(msg);
     } catch (e) {
       console.log('e: ', e);
-      console.log('e.name: ', e.name);          
+      console.log('e.name: ', e.name);
     }
 
     if (!jsonMsg) return;
 
-    switch(jsonMsg.type) {
+    switch (jsonMsg.type) {
       case 'login':
-        const loggedUser = wsClients.find(user => user.nickname === jsonMsg.nickname);
+        const loggedUser = wsClients.find((user) => user.nickname === jsonMsg.nickname);
 
         if (loggedUser) {
           const responseMessage = {
             type: 'loginReject',
-            message: `${jsonMsg.nickname} has already exist!`,
-          }
+            message: `Access denied: nickname <${jsonMsg.nickname}> has already exist!`,
+          };
 
           ws.send(JSON.stringify(responseMessage));
         }
-          
+
         if (!loggedUser) {
           wsClients.push({
             ws,
             nickname: jsonMsg.nickname,
-          })
+          });
 
-          const chatUsers = wsClients.map(user => user.nickname);
+          const chatUsers = wsClients.map((user) => user.nickname);
 
           const responseLoginSuccess = {
             type: 'loginSuccess',
@@ -114,36 +107,36 @@ wsServer.on('connection', (ws, req) => {
 
           ws.send(JSON.stringify(responseLoginSuccess));
 
-          const responseLoginSuccessToAll = {
+          const responseNewUserLoggedToAll = {
             type: 'newUserLogged',
-            data: jsonMsg.nickname,
+            message: jsonMsg.nickname,
           };
 
           [...wsServer.clients]
             .filter((client) => client.readyState === WS.OPEN)
-              .forEach((client) => client.send(JSON.stringify(responseLoginSuccessToAll), errCallback));
+            .forEach((client) => client.send(JSON.stringify(responseNewUserLoggedToAll)));
         }
-        
+
         break;
 
       case 'message':
         chatMessages.push(jsonMsg);
-
+        console.log('chatMessages: ', chatMessages);
         [...wsServer.clients]
-        .filter((client) => client.readyState === WS.OPEN)
-          .forEach((client) => client.send(msg, errCallback));
+          .filter((client) => client.readyState === WS.OPEN)
+          .forEach((client) => client.send(msg));
 
         break;
       default:
         console.log('default case jsonMsg.type: ', jsonMsg.type);
         break;
-    }  
-    }); 
+    }
+  });
 });
 
 server.listen(port, (err) => {
   if (err) {
-    console.log('Error occured:', error);
+    console.log('Error occured:', err);
     return;
   }
   console.log(`server is listening on ${port}`);
